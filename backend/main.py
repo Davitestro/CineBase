@@ -8,11 +8,7 @@ import signal
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import webview
 import ffmpeg
-
-os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
-sys.argv.append("--no-sandbox")
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -136,54 +132,36 @@ def get_all_progress():
         "watched": config.get("watched", [])
     }
 
-class Api:
-    def select_folder(self):
-        result = window.create_file_dialog(webview.FOLDER_DIALOG)
-        if result and len(result) > 0:
-            config = load_config()
-            config["video_dir"] = result[0]
-            config["last_played"] = ""
-            save_config(config)
-            return result[0]
-        return ""
-
-def on_window_closed():
-    print("🛑 Окно CINEBASE закрыто! Завершаем фоновые процессы...")
+@app.post("/api/set_video_dir")
+def set_video_dir(data: dict):
+    """Set the video directory (called by Qt frontend)"""
+    config = load_config()
+    video_dir = data.get("video_dir", "")
     
-    pid_file = os.path.join(BASE_DIR, "..", "frontend.pid")
-    if os.path.exists(pid_file):
-        try:
-            with open(pid_file, "r") as f:
-                frontend_pid = int(f.read().strip())
-            
-            os.kill(frontend_pid, signal.SIGTERM)
-            os.remove(pid_file)
-            print("[Clean] Сервер фронтенда успешно остановлен.")
-        except Exception as e:
-            print(f"[Error] Не удалось остановить фронтенд: {e}")
-            
-    os.kill(os.getpid(), signal.SIGINT)
+    if video_dir and os.path.isdir(video_dir):
+        config["video_dir"] = video_dir
+        config["last_played"] = ""
+        save_config(config)
+        return {"status": "ok", "video_dir": video_dir}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid directory")
+
+@app.get("/api/status")
+def status():
+    """Check backend status"""
+    return {"status": "running", "message": "CINEBASE Backend API"}
 
 if __name__ == "__main__":
-    threading.Thread(target=lambda: uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning"), daemon=True).start()
+    print("╔════════════════════════════════════╗")
+    print("║     CINEBASE Backend API Server    ║")
+    print("║      (Qt C++ Frontend Edition)     ║")
+    print("╚════════════════════════════════════╝")
+    print("")
+    print("🔵 Starting FastAPI Server...")
+    print("📡 Listening on: http://127.0.0.1:8000")
+    print("📚 API Docs: http://127.0.0.1:8000/docs")
+    print("")
+    print("Press Ctrl+C to stop the server")
+    print("")
     
-    window = webview.create_window(
-        title="CINEBASE",
-        url="http://localhost:5173",
-        js_api=Api(),
-        width=1200,
-        height=800,
-        resizable=True,
-        fullscreen=False,
-        min_size=(800, 600),
-        confirm_close=False,
-        background_color="#0B0B0F"
-    )
-    
-    window.events.closed += on_window_closed
-    
-    webview.start(
-        gui='qt',
-        debug=False,
-        http_server=True
-    )
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")

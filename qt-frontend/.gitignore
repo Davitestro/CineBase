@@ -1,0 +1,56 @@
+# Qt Creator build/project files
+build/
+*.pro.user*
+*.pro.user.*.4.4.pro
+*.creator
+*.creator.user*
+CMakeLists.txt.user*
+CMakeLists.txt.user
+
+# Qt build directories
+debug/
+release/
+.qmake.stash
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# Build outputs
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+CINEBASE
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Qt Resource files
+qrc_*
+moc_*
+ui_*
+
+# Compiled Python
+*.pyc
+__pycache__/
+
+# Virtual environment
+venv/
+.venv/
+
+# Configuration
+config.json
+.pid
