@@ -19,6 +19,29 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+BACKEND_PID=""
+FRONTEND_PID=""
+
+cleanup() {
+    echo ""
+    echo -e "${YELLOW}Stopping CINEBASE processes...${NC}"
+
+    if [ -n "$FRONTEND_PID" ] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+        kill "$FRONTEND_PID" 2>/dev/null || true
+        wait "$FRONTEND_PID" 2>/dev/null || true
+    fi
+
+    pkill -TERM -f "mpv" 2>/dev/null || true
+    sleep 2
+    pkill -KILL -f "mpv" 2>/dev/null || true
+
+    if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+        kill "$BACKEND_PID" 2>/dev/null || true
+        wait "$BACKEND_PID" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
 
 # Check if Qt frontend is built
 if [ ! -f "$QT_BUILD_DIR/CINEBASE" ]; then
@@ -75,5 +98,7 @@ echo "  Backend:  Shown above"
 echo "  Frontend: CINEBASE window"
 echo ""
 
-# Wait for both processes
-wait
+# When the UI closes, stop the backend too.
+wait "$FRONTEND_PID" || true
+cleanup
+trap - EXIT INT TERM

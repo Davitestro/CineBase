@@ -20,6 +20,7 @@
 #include <QFont>
 #include <QProcessEnvironment>
 #include <QSizePolicy>
+#include <QThread>
 #include <iostream>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -683,9 +684,17 @@ void MainWindow::cleanupResources() {
     }
     
     std::cout << "🛑 CINEBASE Closing - Cleaning up resources..." << std::endl;
-    
-    // Kill any running mpv processes
-    QProcess::execute("pkill", QStringList() << "-f" << "mpv");
+
+    // Let mpv quit normally first so --save-position-on-quit can write resume data.
+    QProcess::execute("pkill", QStringList() << "-TERM" << "-f" << "mpv");
+    QThread::msleep(1800);
+
+    // If a player ignored TERM, finish cleanup so closing the UI does not leave it running.
+    if (QProcess::execute("pgrep", QStringList() << "-f" << "mpv") == 0) {
+        QProcess::execute("pkill", QStringList() << "-KILL" << "-f" << "mpv");
+    }
+
+    apiManager->shutdownBackendSync(1000);
     
     std::cout << "[Clean] Resources cleaned successfully" << std::endl;
 }

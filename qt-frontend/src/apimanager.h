@@ -22,6 +22,7 @@ public:
     void loadProgress();
     void setVideoDirectory(const QString &directory);
     void checkStatus();
+    void shutdownBackendSync(int timeoutMs = 1000);
 
 signals:
     void videosLoaded(const QJsonArray &videos, const QString &videoDir);

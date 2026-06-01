@@ -5,6 +5,10 @@ import sys
 import threading
 import subprocess
 import signal
+import socket
+import tempfile
+import time
+import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -15,6 +19,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+CONFIG_LOCK = threading.Lock()
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -31,6 +36,48 @@ def load_config():
 def save_config(config_data):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config_data, f, ensure_ascii=False, indent=4)
+
+def save_video_progress(video_id, position):
+    if not video_id or position is None:
+        return
+
+    with CONFIG_LOCK:
+        config = load_config()
+        config.setdefault("progress", {})
+        config["progress"][video_id] = max(0.0, float(position))
+        save_config(config)
+
+def read_mpv_property(ipc_socket, property_name):
+    try:
+        command = json.dumps({"command": ["get_property", property_name]}) + "\n"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(0.4)
+            client.connect(ipc_socket)
+            client.sendall(command.encode("utf-8"))
+            response = client.recv(4096).decode("utf-8")
+        data = json.loads(response.strip().splitlines()[-1])
+        if data.get("error") == "success":
+            return data.get("data")
+    except Exception:
+        return None
+    return None
+
+def track_mpv_progress(process, ipc_socket, video_id):
+    last_position = None
+
+    while process.poll() is None:
+        position = read_mpv_property(ipc_socket, "time-pos")
+        if isinstance(position, (int, float)):
+            last_position = position
+            save_video_progress(video_id, position)
+        time.sleep(0.5)
+
+    position = read_mpv_property(ipc_socket, "time-pos")
+    if isinstance(position, (int, float)):
+        last_position = position
+
+    if last_position is not None:
+        save_video_progress(video_id, last_position)
 
 def get_video_metadata(file_path):
     try:
@@ -98,15 +145,23 @@ def play_video(data: dict):
     save_config(config)
 
     def run_mpv():
+        ipc_socket = os.path.join(tempfile.gettempdir(), f"cinebase-mpv-{uuid.uuid4().hex}.sock")
         cmd = [
             "mpv",
             f"--aid={saved_track}",
             "--save-position-on-quit",
+            f"--input-ipc-server={ipc_socket}",
             full_path
         ]
-        subprocess.run(cmd)
+        process = subprocess.Popen(cmd)
+        try:
+            track_mpv_progress(process, ipc_socket, video_id)
+            process.wait()
+        finally:
+            if os.path.exists(ipc_socket):
+                os.remove(ipc_socket)
 
-    threading.Thread(target=run_mpv).start()
+    threading.Thread(target=run_mpv, daemon=True).start()
     return {"status": "playing"}
 
 @app.post("/api/toggle_watched")
@@ -164,6 +219,15 @@ def set_video_dir(data: dict):
 def status():
     """Check backend status"""
     return {"status": "running", "message": "CINEBASE Backend API"}
+
+@app.post("/api/shutdown")
+def shutdown():
+    """Stop the backend when the desktop frontend exits."""
+    def stop_server():
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Timer(0.2, stop_server).start()
+    return {"status": "shutting_down"}
 
 if __name__ == "__main__":
     print("╔════════════════════════════════════╗")

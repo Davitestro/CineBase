@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QUrl>
+#include <QEventLoop>
+#include <QTimer>
 #include <QDebug>
 #include <iostream>
 
@@ -32,6 +34,28 @@ void ApiManager::setVideoDirectory(const QString &directory) {
 
 void ApiManager::checkStatus() {
     makeGetRequest("status");
+}
+
+void ApiManager::shutdownBackendSync(int timeoutMs) {
+    QUrl url = buildUrl("shutdown");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QNetworkReply *reply = networkManager->post(request, QByteArray("{}"));
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+    timer.start(timeoutMs);
+    loop.exec();
+
+    if (reply->isRunning()) {
+        reply->abort();
+    }
+    reply->deleteLater();
 }
 
 void ApiManager::loadVideos() {
