@@ -19,6 +19,7 @@
 #include <QSpacerItem>
 #include <QFont>
 #include <QProcessEnvironment>
+#include <QSizePolicy>
 #include <iostream>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -81,7 +82,9 @@ void MainWindow::setupUI() {
     
     splitter->addWidget(sidebarWidget);
     splitter->addWidget(mainPanelWidget);
-    splitter->setSizes({350, 850});
+    splitter->setSizes({520, 680});
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 2);
     splitter->setCollapsible(0, false);
     splitter->setCollapsible(1, false);
     
@@ -119,12 +122,11 @@ void MainWindow::createSidebar() {
     currentDirLabel->setStyleSheet("color: #888; font-size: 10px;");
     sidebarLayout->addWidget(currentDirLabel);
     
-    // Search input is kept for internal filtering.
+    // Search input
     searchInput = new QLineEdit();
-    searchInput->setPlaceholderText("Search videos...");
+    searchInput->setPlaceholderText("Search series or file name...");
     searchInput->setMinimumHeight(35);
     connect(searchInput, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
-    searchInput->setVisible(false);
     sidebarLayout->addWidget(searchInput);
     
     // Library header
@@ -155,14 +157,13 @@ void MainWindow::createSidebar() {
     videoListWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     videoListWidget->setTextElideMode(Qt::ElideRight);
     videoListWidget->setEnabled(false);
+    videoListWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     connect(videoListWidget, &QListWidget::itemSelectionChanged, this, [this]() {
         if (videoListWidget->currentItem()) {
             onVideoSelected(videoListWidget->currentItem());
         }
     });
-    sidebarLayout->addWidget(videoListWidget);
-    
-    sidebarLayout->addStretch();
+    sidebarLayout->addWidget(videoListWidget, 1);
     sidebarWidget->setStyleSheet("QWidget { background-color: #0B0B0F; }");
 }
 
@@ -304,9 +305,10 @@ void MainWindow::applyStyles() {
         }
         
         QListWidget::item {
-            padding: 8px;
-            border-radius: 4px;
-            margin: 2px 0px;
+            padding: 10px 12px;
+            border-radius: 0px;
+            margin: 0px;
+            border-bottom: 1px solid #16161c;
         }
         
         QListWidget::item:hover {
@@ -437,20 +439,26 @@ void MainWindow::updateVideoList(const QJsonArray &videos) {
             
             QListWidgetItem *item = new QListWidgetItem();
             QString displayText = title;
+            bool watched = watchedList.contains(videoId);
             
             // Add progress info if exists
             if (progressMap.contains(videoId) && progressMap[videoId] > 3) {
                 double progress = progressMap[videoId];
                 displayText += QString(" (%1)").arg(formatTime(progress));
             }
+
+            if (watched) {
+                displayText = QString("✓  %1").arg(displayText);
+            }
             
             item->setText(displayText);
             item->setData(Qt::UserRole, videoId);
+            item->setSizeHint(QSize(0, 42));
             
             // Mark watched items with different style
-            if (watchedList.contains(videoId)) {
-                item->setBackground(QColor("#1a1a20"));
-                item->setForeground(QColor("#666"));
+            if (watched) {
+                item->setBackground(QColor("#12121a"));
+                item->setForeground(QColor("#66cc66"));
             }
             
             videoListWidget->addItem(item);
@@ -507,16 +515,16 @@ void MainWindow::displayVideoDetails(const QJsonObject &video) {
     if (watchedList.contains(videoId)) {
         progressLabel->setText("✓ Watched");
         progressLabel->setStyleSheet("color: #66cc66; font-weight: bold;");
-        watchedButton->setText("☑ Mark as Unwatched");
+        watchedButton->setText("↺ Mark Unwatched");
     } else if (progressMap.contains(videoId) && progressMap[videoId] > 3) {
         double progress = progressMap[videoId];
         progressLabel->setText(QString("Resume: %1").arg(formatTime(progress)));
         progressLabel->setStyleSheet("color: #a892ff; font-weight: bold;");
-        watchedButton->setText("☐ Mark as Watched");
+        watchedButton->setText("✓ Mark Watched");
     } else {
         progressLabel->setText("Not watched");
         progressLabel->setStyleSheet("color: #888; font-weight: bold;");
-        watchedButton->setText("☐ Mark as Watched");
+        watchedButton->setText("✓ Mark Watched");
     }
     
     // Clear and recreate tracks
@@ -570,11 +578,15 @@ void MainWindow::onToggleWatched() {
     if (selectedVideo.isEmpty()) return;
     
     QString videoId = selectedVideo["id"].toString();
+    if (watchedList.contains(videoId)) {
+        watchedList.removeAll(videoId);
+    } else {
+        watchedList.append(videoId);
+    }
+
+    updateVideoList(currentVideos);
+    displayVideoDetails(selectedVideo);
     apiManager->toggleWatched(videoId);
-    
-    QTimer::singleShot(200, this, [this]() {
-        onLibraryUpdated();
-    });
 }
 
 void MainWindow::onTrackChanged(int trackIndex) {
@@ -596,8 +608,12 @@ void MainWindow::updateProgress() {
     apiManager->loadProgress();
 }
 
-void MainWindow::loadProgress() {
-    // Progress loaded via ApiManager, update UI
+void MainWindow::loadProgress(const QJsonObject &progress) {
+    videoLibrary->updateProgress(progress);
+    progressMap = videoLibrary->getProgress();
+    tracksMap = videoLibrary->getTracks();
+    watchedList = videoLibrary->getWatched();
+
     updateVideoList(currentVideos);
     if (!selectedVideo.isEmpty()) {
         displayVideoDetails(selectedVideo);

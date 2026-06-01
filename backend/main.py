@@ -19,7 +19,13 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
+            config.setdefault("video_dir", "")
+            config.setdefault("last_played", "")
+            config.setdefault("progress", {})
+            config.setdefault("tracks", {})
+            config.setdefault("watched", [])
+            return config
     return {"video_dir": "", "last_played": "", "progress": {}, "tracks": {}, "watched": []}
 
 def save_config(config_data):
@@ -57,9 +63,11 @@ def list_videos():
     
     videos = []
     extensions = ('.mp4', '.mkv', '.webm', '.avi')
+    watched = set(config.get("watched", []))
+    progress = config.get("progress", {})
     for root, _, files in os.walk(video_dir):
         for file in sorted(files):
-            if file.endswith(extensions):
+            if file.lower().endswith(extensions):
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, video_dir)
                 meta = get_video_metadata(full_path)
@@ -68,7 +76,9 @@ def list_videos():
                     "title": meta["title"], 
                     "filename": file, 
                     "tracks": meta["tracks"],
-                    "duration": meta["duration"]
+                    "duration": meta["duration"],
+                    "watched": rel_path in watched,
+                    "progress": progress.get(rel_path, 0)
                 })
     return {"videos": videos, "video_dir": video_dir, "last_played": config.get("last_played", "")}
 
@@ -103,15 +113,19 @@ def play_video(data: dict):
 def toggle_watched(data: dict):
     config = load_config()
     video_id = data.get("video_id")
+    if not video_id:
+        raise HTTPException(status_code=400, detail="video_id is required")
     if "watched" not in config: config["watched"] = []
     
     if video_id in config["watched"]:
         config["watched"].remove(video_id)
+        watched = False
     else:
         config["watched"].append(video_id)
+        watched = True
         
     save_config(config)
-    return {"status": "ok"}
+    return {"status": "ok", "video_id": video_id, "watched": watched, "watched_list": config["watched"]}
 
 @app.post("/api/set_track")
 def set_track(data: dict):

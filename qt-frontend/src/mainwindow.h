@@ -47,7 +47,7 @@ private:
     void setLibraryLoading(bool loading);
     void updateVideoList(const QJsonArray &videos);
     void displayVideoDetails(const QJsonObject &video);
-    void loadProgress();
+    void loadProgress(const QJsonObject &progress);
     QString formatTime(double seconds);
     double getProgressPercent(const QString &videoId);
     void updateWatchedStatus();
