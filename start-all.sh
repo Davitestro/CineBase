@@ -39,6 +39,8 @@ cleanup() {
         kill "$BACKEND_PID" 2>/dev/null || true
         wait "$BACKEND_PID" 2>/dev/null || true
     fi
+
+    rm -f "$PROJECT_DIR/backend/active_port.json"
 }
 
 trap cleanup EXIT INT TERM

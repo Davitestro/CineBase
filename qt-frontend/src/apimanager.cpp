@@ -9,12 +9,39 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QDebug>
+#include <QFile>
+#include <QCoreApplication>
+#include <QDir>
 #include <iostream>
+
+int ApiManager::discoverPort() {
+    QStringList searchPaths;
+    searchPaths << QDir(QCoreApplication::applicationDirPath()).filePath("active_port.json");
+    searchPaths << QDir(QCoreApplication::applicationDirPath()).filePath("../backend/active_port.json");
+    searchPaths << QDir(QCoreApplication::applicationDirPath()).filePath("../../backend/active_port.json");
+
+    for (const QString &path : searchPaths) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly)) {
+            QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+            file.close();
+            if (doc.isObject()) {
+                int port = doc.object()["port"].toInt(0);
+                if (port > 0) {
+                    std::cout << "🔍 Discovered backend port: " << port << " (from " << path.toStdString() << ")" << std::endl;
+                    return port;
+                }
+            }
+        }
+    }
+    std::cout << "⚠️  No port file found, defaulting to 8000" << std::endl;
+    return 8000;
+}
 
 ApiManager::ApiManager(QObject *parent)
     : QObject(parent)
     , networkManager(std::make_unique<QNetworkAccessManager>(this))
-    , apiBaseUrl("http://127.0.0.1:8000/api")
+    , apiBaseUrl(QString("http://127.0.0.1:%1/api").arg(discoverPort()))
 {
 }
 
