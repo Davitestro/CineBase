@@ -47,4 +47,5 @@ private:
     std::unique_ptr<QNetworkAccessManager> networkManager;
     QString apiBaseUrl;
     QString videoDirectory;
+    int discoverPort();
 };

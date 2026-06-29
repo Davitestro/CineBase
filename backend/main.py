@@ -14,10 +14,35 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import ffmpeg
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PORT_FILE = os.path.join(BASE_DIR, "active_port.json")
+
+def find_available_port(start_port=8000, max_tries=100):
+    for offset in range(max_tries):
+        port = start_port + offset
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    print(f"❌ No available port found in range {start_port}-{start_port + max_tries - 1}")
+    sys.exit(1)
+
+def write_port_file(port):
+    with open(PORT_FILE, "w") as f:
+        json.dump({"port": port}, f)
+
+def cleanup_port_file():
+    try:
+        if os.path.exists(PORT_FILE):
+            os.remove(PORT_FILE)
+    except OSError:
+        pass
+
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 CONFIG_LOCK = threading.Lock()
 
@@ -230,16 +255,22 @@ def shutdown():
     return {"status": "shutting_down"}
 
 if __name__ == "__main__":
+    port = find_available_port(8000)
+    write_port_file(port)
+
+    import atexit
+    atexit.register(cleanup_port_file)
+
     print("╔════════════════════════════════════╗")
     print("║     CINEBASE Backend API Server    ║")
     print("║      (Qt C++ Frontend Edition)     ║")
     print("╚════════════════════════════════════╝")
     print("")
     print("🔵 Starting FastAPI Server...")
-    print("📡 Listening on: http://127.0.0.1:8000")
-    print("📚 API Docs: http://127.0.0.1:8000/docs")
+    print(f"📡 Listening on: http://127.0.0.1:{port}")
+    print(f"📚 API Docs: http://127.0.0.1:{port}/docs")
     print("")
     print("Press Ctrl+C to stop the server")
     print("")
-    
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
