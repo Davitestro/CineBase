@@ -21,6 +21,7 @@
 #include <QProcessEnvironment>
 #include <QSizePolicy>
 #include <QThread>
+#include <algorithm>
 #include <iostream>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -33,13 +34,15 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("CINEBASE");
     setWindowIcon(QIcon::fromTheme("video-player"));
     
-    // Get screen dimensions
+    // Get screen dimensions and start with a size that works well for both
+    // traditional desktops and tiling window managers.
     QScreen *screen = QApplication::primaryScreen();
-    QRect screenGeometry = screen->geometry();
-    int width = std::min(1200, screenGeometry.width());
-    int height = std::min(800, screenGeometry.height());
+    QRect screenGeometry = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 800);
+    int width = std::min(screenGeometry.width(), std::max(640, std::min(1280, screenGeometry.width() * 3 / 4)));
+    int height = std::min(screenGeometry.height(), std::max(480, std::min(900, screenGeometry.height() * 4 / 5)));
     resize(width, height);
-    setMinimumSize(800, 600);
+    setMinimumSize(640, 480);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     
     // Center window
     move((screenGeometry.width() - width) / 2,
@@ -91,6 +94,7 @@ void MainWindow::setupUI() {
     
     mainLayout->addWidget(splitter);
     setCentralWidget(centralWidget);
+    applyResponsiveLayout();
 }
 
 void MainWindow::createSidebar() {
@@ -262,6 +266,62 @@ void MainWindow::createMainPanel() {
     
     panelLayout->addStretch();
     mainPanelWidget->setStyleSheet("QWidget { background-color: #0B0B0F; }");
+}
+
+void MainWindow::applyResponsiveLayout() {
+    const bool compactLayout = width() < 960;
+    const int panelMargins = compactLayout ? 18 : 30;
+    const int sidebarMargins = compactLayout ? 12 : 15;
+    const int spacing = compactLayout ? 10 : 15;
+    const int buttonHeight = compactLayout ? 40 : 45;
+    const int titleSize = compactLayout ? 15 : 18;
+    const int logoSize = compactLayout ? 14 : 16;
+
+    if (mainPanelWidget) {
+        if (QLayout *panelLayout = mainPanelWidget->layout()) {
+            panelLayout->setContentsMargins(panelMargins, panelMargins, panelMargins, panelMargins);
+            panelLayout->setSpacing(compactLayout ? 12 : 20);
+        }
+    }
+
+    if (sidebarWidget) {
+        if (QLayout *sidebarLayout = sidebarWidget->layout()) {
+            sidebarLayout->setContentsMargins(sidebarMargins, sidebarMargins, sidebarMargins, sidebarMargins);
+            sidebarLayout->setSpacing(spacing);
+        }
+    }
+
+    if (videoTitleLabel) {
+        QFont titleFont = videoTitleLabel->font();
+        titleFont.setPointSize(titleSize);
+        titleFont.setBold(true);
+        videoTitleLabel->setFont(titleFont);
+    }
+
+    if (searchInput) {
+        searchInput->setMinimumHeight(compactLayout ? 32 : 35);
+    }
+
+    if (playButton) {
+        playButton->setMinimumHeight(buttonHeight);
+        playButton->setMinimumWidth(compactLayout ? 120 : 150);
+    }
+
+    if (watchedButton) {
+        watchedButton->setMinimumHeight(buttonHeight);
+        watchedButton->setMinimumWidth(compactLayout ? 145 : 180);
+    }
+
+    if (logoLabel) {
+        QFont logoFont = logoLabel->font();
+        logoFont.setPointSize(logoSize);
+        logoFont.setBold(true);
+        logoLabel->setFont(logoFont);
+    }
+
+    if (currentDirLabel) {
+        currentDirLabel->setStyleSheet(compactLayout ? "color: #888; font-size: 9px;" : "color: #888; font-size: 10px;");
+    }
 }
 
 void MainWindow::applyStyles() {
@@ -665,6 +725,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
+    applyResponsiveLayout();
 }
 
 void MainWindow::timerEvent(QTimerEvent *event) {

@@ -41,6 +41,7 @@ private slots:
 private:
     void setupUI();
     void applyStyles();
+    void applyResponsiveLayout();
     void createSidebar();
     void createMainPanel();
     void requestVideos();
