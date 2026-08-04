@@ -2,7 +2,7 @@
 A modern, native Qt C++ desktop application for video library management and playback. Replaces the web-based React frontend while maintaining full compatibility with the Python FastAPI backend.
 
 <p align="center">
-    <img src="assets/logo.png" alt="CINEBASE Logo" width="160" />
+    <img src="assets/icon.png" alt="CINEBASE Logo" width="160" />
 </p>
 
 A modern, native Qt C++ desktop application for video library management and playback. Replaces the web-based React frontend while maintaining full compatibility with the Python FastAPI backend.
